@@ -432,6 +432,10 @@ input { font: inherit; }
 .detail-banner.playing .detail-banner-play,
 .detail-banner.playing .detail-poster-fb { display: none; }
 .detail-banner.playing iframe { display: block; }
+.detail-banner.playing {
+  overflow: visible;        /* iOS 不裁剪控制条 */
+  border-radius: 0;          /* 播放时去掉圆角 */
+}
 .detail-banner .detail-poster-fb {
   position: absolute; inset: 0;
   display: none; align-items: center; justify-content: center;
@@ -714,9 +718,8 @@ input { font: inherit; }
   <div class="result-info">
     <div class="result-count" id="resultCount">共 <strong>0</strong> 部作品</div>
     <select class="sort-select" id="sortSelect">
-      <option value="year">最新上映</option>
       <option value="default">默认排序</option>
-      <option value="rating">评分最高</option>
+      <option value="year">最新上映</option>
       <option value="title">名称排序</option>
     </select>
   </div>
@@ -781,74 +784,143 @@ function generatePosterColor(title) {
 }
 
 // 加载数据文件
-async function loadData() {
-  // 尝试从 JSON 文件加载
-  const dataFiles = [
-    'data/full_videos.json',
-    'data/xfej.json',
-    'data/jieshui8.json',
-    'data/12ju.json',
-  ];
+// ========== IndexedDB 缓存 ==========
+const DB_NAME = 'movies_cache';
+const DB_VER  = 1;
+let _db = null;
+function openDB() {
+  return new Promise(function(resolve, reject) {
+    if (_db) return resolve(_db);
+    var req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = function(e) {
+      var db = e.target.result;
+      if (!db.objectStoreNames.contains('data')) db.createObjectStore('data');
+    };
+    req.onsuccess = function(e) { _db = e.target.result; resolve(_db); };
+    req.onerror = function(e) { reject(e); };
+  });
+}
+function cacheGet(key) {
+  return openDB().then(function(db) {
+    return new Promise(function(resolve) {
+      var tx = db.transaction('data', 'readonly');
+      var req = tx.objectStore('data').get(key);
+      req.onsuccess = function() { resolve(req.result); };
+      req.onerror = function() { resolve(null); };
+    });
+  });
+}
+function cacheSet(key, value) {
+  return openDB().then(function(db) {
+    return new Promise(function(resolve) {
+      var tx = db.transaction('data', 'readwrite');
+      tx.objectStore('data').put(value, key);
+      tx.oncomplete = function() { resolve(); };
+    });
+  });
+}
 
-  let loaded = false;
-  for (const file of dataFiles) {
+// 数据源映射: 文件 → 源ID
+var DATA_FILES = [
+  { file: 'data/full_videos.json', src: 'mediavip' },
+  { file: 'data/xfej.json',        src: 'xfej' },
+  { file: 'data/jieshui8.json',    src: 'jieshui8' },
+  { file: 'data/12ju.json',        src: '12ju' },
+];
+
+function mapVideo(v, prefix) {
+  return {
+    id:       prefix + '_' + v.id,
+    title:    v.title,
+    cat:      v.category || 'movie',
+    subcat:   v.subcat || '',
+    year:     v.year || '',
+    rating:   v.rating || 0,
+    duration: v.duration || v.status || '',
+    tags:     v.tags || [],
+    desc:     v.desc || '',
+    cast:     v.cast || v.actors || '',
+    src:      v.source || prefix,
+    posterColor: generatePosterColor(v.title),
+    poster:   v.poster || '',
+    url:      v.url || '',
+    status:   v.status || '',
+    streamUrl: v.streamUrl || '',
+  };
+}
+
+async function loadData() {
+  // 1. 获取版本信息
+  var versions = null;
+  try {
+    var vResp = await fetch('data/versions.json');
+    if (vResp.ok) versions = await vResp.json();
+  } catch(e) { console.warn('版本检测失败，直接网络加载'); }
+
+  var loaded = false;
+  for (var d = 0; d < DATA_FILES.length; d++) {
+    var df = DATA_FILES[d];
+    var cacheKey = df.src;
+    var ver = versions && versions[df.file] ? versions[df.file].updated : '';
+    var cachedVer = '';
+
+    // 2. 尝试从 IndexedDB 读取缓存
     try {
-      const resp = await fetch(file);
-      if (!resp.ok) continue;
-      const json = await resp.json();
-      if (json.videos && json.videos.length > 0) {
-        // 将外部数据结构映射为内部格式
-        const prefix = json.source || file;
-        json.videos.forEach(v => {
-          // 跳过无流地址的视频
-          if (!v.streamUrl) return;
-          ALL_VIDEOS.push({
-            id:       prefix + '_' + v.id,
-            title:    v.title,
-            cat:      v.category || 'movie',
-            subcat:   v.subcat || '',
-            year:     v.year || '',
-            rating:   v.rating || 0,
-            duration: v.duration || v.status || '',
-            tags:     v.tags || [],
-            desc:     v.desc || '',
-            cast:     v.cast || v.actors || '',
-            src:      v.source || prefix,
-            posterColor: generatePosterColor(v.title),
-            poster:   v.poster || '',
-            url:      v.url || '',
-            status:   v.status || '',
-            streamUrl: v.streamUrl || '',
-          });
-        });
+      var cached = await cacheGet(cacheKey);
+      if (cached && cached.videos && cached.ver === ver) {
+        console.log('📦 缓存命中: ' + df.file);
+        cached.videos.forEach(function(v) { ALL_VIDEOS.push(v); });
         loaded = true;
-        console.log(`✅ 已加载 ${file}: ${json.videos.length} 条数据`);
+        continue;
       }
-    } catch (e) {
-      console.warn(`⚠ 无法加载 ${file}: ${e.message}`);
+      if (cached) cachedVer = cached.ver || '';
+    } catch(e) {}
+
+    // 3. 缓存未命中或过期，从网络加载
+    try {
+      console.log('🌐 网络加载: ' + df.file);
+      var resp = await fetch(df.file);
+      if (!resp.ok) continue;
+      var json = await resp.json();
+      if (json.videos && json.videos.length > 0) {
+        var prefix = json.source || df.file;
+        var mapped = [];
+        json.videos.forEach(function(v) {
+          if (!v.streamUrl) return;
+          mapped.push(mapVideo(v, prefix));
+        });
+        ALL_VIDEOS.push.apply(ALL_VIDEOS, mapped);
+        loaded = true;
+        // 存入 IndexedDB
+        cacheSet(cacheKey, { ver: ver, videos: mapped }).catch(function(){});
+        console.log('✅ 已缓存: ' + df.file + ' (' + mapped.length + '条)');
+      }
+    } catch(e) {
+      console.warn('⚠ 加载失败: ' + df.file + ' ' + e.message);
+      // 网络失败时尝试用旧的缓存
+      try {
+        var fallback = await cacheGet(cacheKey);
+        if (fallback && fallback.videos) {
+          console.log('📦 离线缓存: ' + df.file);
+          fallback.videos.forEach(function(v) { ALL_VIDEOS.push(v); });
+          loaded = true;
+        }
+      } catch(e2) {}
     }
   }
 
-  // 如果没有任何数据加载成功，使用微小的 fallback 示例
   if (!loaded || ALL_VIDEOS.length === 0) {
-    console.warn('⚠ 无数据源可用，使用示例数据');
-    ALL_VIDEOS = [
-      { id:'demo_1', title:'数据加载中...', cat:'movie', subcat:'', year:'', rating:0, duration:'', tags:[], desc:'请在 data/ 目录下放置 JSON 数据文件，或运行 scraper.py 生成数据。', cast:'', src:'mediavip', posterColor:'#555' },
-    ];
+    ALL_VIDEOS = [{ id:'demo_1', title:'数据加载中...', cat:'movie', src:'mediavip', posterColor:'#555' }];
   }
 
-  // 初始渲染
   renderSources();
   renderCatTabs();
   renderSubcats();
   renderCards();
 
-  // 如果 URL 中有 hash 路由，恢复详情页
   if (location.hash.startsWith('#detail/')) {
-    const id = decodeURIComponent(location.hash.replace('#detail/', ''));
-    if (id && ALL_VIDEOS.length > 0) {
-      openDetail(id);
-    }
+    var id = decodeURIComponent(location.hash.replace('#detail/', ''));
+    if (id && ALL_VIDEOS.length > 0) openDetail(id);
   }
 }
 
@@ -860,7 +932,7 @@ let state = {
   currentCat: 'movie',
   currentSubcat: null,  // null = 全部
   searchQuery: '',
-  sortBy: 'year',
+  sortBy: 'default',
   page: 1,
   pageSize: 20,
 };
@@ -926,8 +998,7 @@ function getFilteredVideos() {
   }
 
   // sort
-  if (sort === 'rating') list.sort((a,b) => b.rating - a.rating);
-  else if (sort === 'year')   list.sort((a,b) => b.year - a.year);
+  if (sort === 'year')   list.sort((a,b) => b.year - a.year);
   else if (sort === 'title')  list.sort((a,b) => a.title.localeCompare(b.title, 'zh'));
 
   return list;
@@ -1175,7 +1246,13 @@ function playVideo(banner, streamUrl) {
     video.controls = true;
     video.autoplay = true;
     video.setAttribute('playsinline', '');
-    video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;';
+    video.setAttribute('webkit-playsinline', '');
+    video.setAttribute('x-webkit-airplay', 'allow');
+    video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000;';
+    video.addEventListener('loadedmetadata', function() {
+      // iOS 加载完确保能拉进度条
+      video.play().catch(function(){});
+    });
     banner.appendChild(video);
   }
   // 清理 iframe
