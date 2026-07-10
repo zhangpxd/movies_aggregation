@@ -1147,16 +1147,16 @@ function openDetail(id) {
 
   // 海报：有真实图片用横幅，否则用渐变色占位
   const posterHTML = v.poster
-    ? `<div class="detail-banner" id="detailBanner" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')">
+    ? `<div class="detail-banner" id="detailBanner">
          <img src="${v.poster}" alt="${v.title}" onerror="this.style.display='none';this.parentElement.querySelector('.detail-poster-fb').style.display='flex'">
          <div class="detail-poster-fb" style="background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})">🎬</div>
-         <div class="detail-banner-play"><div class="detail-banner-play-icon">▶</div></div>
+         <div class="detail-banner-play" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')"><div class="detail-banner-play-icon">▶</div></div>
          <iframe id="detailPlayer" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation allow-downloads" referrerpolicy="no-referrer"></iframe>
          <button class="detail-banner-close" onclick="stopPlay(event)">✕</button>
        </div>`
-    : `<div class="detail-banner" id="detailBanner" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')">
+    : `<div class="detail-banner" id="detailBanner">
          <div class="detail-poster-fb" style="display:flex;background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})">🎬</div>
-         <div class="detail-banner-play"><div class="detail-banner-play-icon">▶</div></div>
+         <div class="detail-banner-play" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')"><div class="detail-banner-play-icon">▶</div></div>
          <iframe id="detailPlayer" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation allow-downloads" referrerpolicy="no-referrer"></iframe>
          <button class="detail-banner-close" onclick="stopPlay(event)">✕</button>
        </div>`;
@@ -1238,6 +1238,12 @@ function startPlay(url, ep) {
   }
 }
 
+// 是否 iOS 设备（含 iPadOS 触摸版，其 UA 伪装为 Mac）
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 function playVideo(banner, streamUrl) {
   let video = document.getElementById('detailVideo');
   if (!video) {
@@ -1248,6 +1254,8 @@ function playVideo(banner, streamUrl) {
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', '');
     video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000;';
+    // 阻止点击冒泡到 banner，避免 iOS 上点控制条/暂停被误判为重新播放
+    video.addEventListener('click', function(e){ e.stopPropagation(); });
     banner.appendChild(video);
   }
   // 清理 iframe
@@ -1257,7 +1265,10 @@ function playVideo(banner, streamUrl) {
   if (video._hls) { video._hls.destroy(); video._hls = null; }
   video.removeAttribute('src');
 
-  if (window.Hls && Hls.isSupported()) {
+  if (isIOS()) {
+    // iOS Safari 原生支持 HLS，直接用 video.src（iPhone 无 MSE，HLS.js 会失败）
+    video.src = streamUrl;
+  } else if (window.Hls && Hls.isSupported()) {
     const hls = new Hls();
     hls.loadSource(streamUrl);
     hls.attachMedia(video);
@@ -1297,23 +1308,6 @@ function useIframe(banner, url, source) {
   const iframe = document.getElementById('detailPlayer');
   if (iframe) { iframe.src = url; banner.classList.add('playing'); }
   else { window.open(url, '_blank'); }
-}
-
-function stopPlay(e) {
-  if (e) e.stopPropagation();
-  var banner = document.getElementById('detailBanner');
-  var iframe = document.getElementById('detailPlayer');
-  if (!banner) return;
-  banner.classList.remove('playing');
-  banner.style.cursor = '';
-  stopVideoPlayer();
-  if (iframe) {
-    iframe.src = '';
-    iframe.style.opacity = '';
-    iframe.style.transition = '';
-    iframe.onload = null;
-    iframe.onerror = null;
-  }
 }
 
 function closeDetail() {
