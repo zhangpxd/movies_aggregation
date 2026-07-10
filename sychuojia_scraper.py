@@ -1,7 +1,9 @@
-"""草民影院元数据 - 慢速安全版 (3线程, ~2条/s)"""
-import json, re, time, requests, threading
+"""草民影院元数据 - 慢速安全版"""
+import json, re, time, sys, requests, threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+
+sys.stdout.reconfigure(line_buffering=True)
 
 try: import urllib3; urllib3.disable_warnings()
 except: pass

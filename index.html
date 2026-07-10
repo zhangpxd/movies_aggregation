@@ -672,6 +672,7 @@ input { font: inherit; }
 .toast.show { opacity: 1; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.js"></script>
 </head>
 <body>
 
@@ -1239,39 +1240,46 @@ function startPlay(url, ep) {
 }
 
 function playVideo(banner, streamUrl) {
-  let video = document.getElementById('detailVideo');
-  if (!video) {
-    video = document.createElement('video');
-    video.id = 'detailVideo';
-    video.controls = true;
-    video.autoplay = true;
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-    video.setAttribute('x-webkit-airplay', 'allow');
-    video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000;';
-    banner.appendChild(video);
-  }
-  // 清理 iframe
-  const iframe = document.getElementById('detailPlayer');
+  // 清理旧播放器
+  stopVideoPlayer();
+  // 创建 DPlayer 容器
+  var container = document.createElement('div');
+  container.id = 'dplayerContainer';
+  container.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:#000;';
+  banner.appendChild(container);
+  // 清理 banner iframe
+  var iframe = document.getElementById('detailPlayer');
   if (iframe) iframe.src = '';
-  // 清理旧 hls
-  if (video._hls) { video._hls.destroy(); video._hls = null; }
-  video.removeAttribute('src');
-
-  if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls();
-    hls.loadSource(streamUrl);
-    hls.attachMedia(video);
-    video._hls = hls;
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = streamUrl;
-  }
+  
+  var dp = new DPlayer({
+    container: container,
+    autoplay: true,
+    theme: '#ff6b35',
+    lang: 'zh-cn',
+    loop: false,
+    screenshot: false,
+    hotkey: true,
+    preload: 'auto',
+    volume: 0.7,
+    video: { url: streamUrl, type: 'auto' },
+  });
+  container._dp = dp;
   banner.classList.add('playing');
 }
 
+function stopVideoPlayer() {
+  var container = document.getElementById('dplayerContainer');
+  if (container && container._dp) {
+    container._dp.destroy();
+    container._dp = null;
+  }
+  if (container) { container.remove(); }
+  var oldVideo = document.getElementById('detailVideo');
+  if (oldVideo) { oldVideo.pause(); oldVideo.removeAttribute('src'); oldVideo.remove(); }
+}
+
 function useIframe(banner, url, source) {
-  const video = document.getElementById('detailVideo');
-  if (video) { video.pause(); if (video._hls) { video._hls.destroy(); video._hls = null; } video.removeAttribute('src'); }
+  stopVideoPlayer();
   const iframe = document.getElementById('detailPlayer');
   if (iframe) { iframe.src = url; banner.classList.add('playing'); }
   else { window.open(url, '_blank'); }
@@ -1279,24 +1287,18 @@ function useIframe(banner, url, source) {
 
 function stopPlay(e) {
   if (e) e.stopPropagation();
-  const banner = document.getElementById('detailBanner');
-  const iframe = document.getElementById('detailPlayer');
-  const video = document.getElementById('detailVideo');
+  var banner = document.getElementById('detailBanner');
+  var iframe = document.getElementById('detailPlayer');
   if (!banner) return;
   banner.classList.remove('playing');
   banner.style.cursor = '';
+  stopVideoPlayer();
   if (iframe) {
     iframe.src = '';
     iframe.style.opacity = '';
     iframe.style.transition = '';
     iframe.onload = null;
     iframe.onerror = null;
-  }
-  if (video) {
-    video.pause();
-    video.removeAttribute('src');
-    if (video._hls) { video._hls.destroy(); video._hls = null; }
-    video.remove();
   }
 }
 
