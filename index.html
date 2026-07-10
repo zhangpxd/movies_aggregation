@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>影视聚合 - 发现精彩影视</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dplayer/dist/DPlayer.min.css">
+<style>
+/* ========== CSS Variables ========== */
+:root {
+  --primary: #ff6b35;
+  --primary-light: #fff0e8;
+  --bg: #f5f6fa;
+  --card-bg: #ffffff;
+  --text: #1a1a2e;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border: #e5e7eb;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+  --shadow: 0 4px 16px rgba(0,0,0,.08);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,.12);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 16px;
+  --transition: 0.2s ease;
+  --header-h: 64px;
+  --max-width: 1280px;
+  --tag-vip: #ff6b35;
+  --tag-exclusive: #7c3aed;
+  --tag-quality: #059669;
+  --tag-free: #2563eb;
+  --star-color: #f59e0b;
+}
+
+/* ========== Reset & Base ========== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { text-decoration: none; color: inherit; }
+img { max-width: 100%; display: block; }
+button { cursor: pointer; border: none; background: none; font: inherit; }
+input { font: inherit; }
+
+/* ========== Header ========== */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+  height: var(--header-h);
+}
+.header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.logo {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--primary);
+  white-space: nowrap;
+  letter-spacing: -.5px;
+  display: flex; align-items: center; gap: 8px;
+}
+.logo-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--primary), #ff8c5a);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: #fff;
+}
+
+/* Search */
+.search-wrap {
+  flex: 1; max-width: 520px;
+  position: relative;
+}
+.search-input {
+  width: 100%; height: 42px;
+  padding: 0 48px 0 18px;
+  border: 2px solid var(--border);
+  border-radius: 24px;
+  background: var(--bg);
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: var(--transition);
+}
+.search-input:focus { border-color: var(--primary); background: #fff; }
+.search-input::placeholder { color: var(--text-muted); }
+.search-btn {
+  position: absolute; right: 4px; top: 50%;
+  transform: translateY(-50%);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  transition: var(--transition);
+}
+.search-btn:hover { background: #e55a2b; }
+
+/* ========== Main Content ========== */
+.main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+/* ========== Data Sources ========== */
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.section-title::before {
+  content: '';
+  width: 3px; height: 16px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+.source-section { padding-top: 20px; }
+.source-list {
+  display: flex; gap: 12px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.source-list::-webkit-scrollbar { display: none; }
+.source-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.source-item:hover { border-color: var(--primary); color: var(--primary); }
+.source-item.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+.source-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+.source-dot.s1 { background: #ff6b35; }
+.source-dot.s2 { background: #3b82f6; }
+.source-dot.s3 { background: #10b981; }
+.source-dot.s4 { background: #8b5cf6; }
+
+/* ========== Main Categories ========== */
+.category-section { padding-top: 28px; }
+.cat-tabs {
+  display: flex; gap: 0;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: var(--shadow-sm);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.cat-tabs::-webkit-scrollbar { display: none; }
+.cat-tab {
+  flex: 1;
+  padding: 14px 20px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: var(--transition);
+  position: relative;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+.cat-tab:hover { color: var(--text); background: #fafbfc; }
+.cat-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: var(--primary-light);
+}
+.cat-count {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ========== Sub Categories ========== */
+.subcat-section { padding-top: 16px; }
+.subcat-list {
+  display: flex; gap: 10px;
+  flex-wrap: wrap;
+}
+.subcat-tag {
+  padding: 7px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  transition: var(--transition);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.subcat-tag:hover { border-color: var(--primary); color: var(--primary); }
+.subcat-tag.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.subcat-tag.all { font-weight: 600; }
+
+/* ========== Result Info ========== */
+.result-info {
+  padding-top: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+}
+.result-count {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.result-count strong { color: var(--primary); font-weight: 700; }
+.sort-select {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  outline: none;
+  cursor: pointer;
+}
+
+/* ========== Video Card Grid ========== */
+.video-grid {
+  padding-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+}
+@media (max-width: 1100px) { .video-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 768px)  { .video-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
+@media (max-width: 480px)  { .video-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
+.video-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.video-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+.card-poster-wrap {
+  position: relative;
+  aspect-ratio: 3/4;
+  overflow: hidden;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+}
+.card-poster {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform .4s ease;
+}
+.card-poster.gradient-fallback { display: block; }
+.video-card:hover .card-poster { transform: scale(1.06); }
+.card-badges {
+  position: absolute; top: 8px; left: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+}
+.badge-vip { background: var(--tag-vip); }
+.badge-exclusive { background: var(--tag-exclusive); }
+.badge-quality { background: var(--tag-quality); }
+.badge-free { background: var(--tag-free); }
+
+.card-score {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 12px; font-weight: 700;
+  color: var(--star-color);
+  background: rgba(0,0,0,.65);
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex; align-items: center; gap: 3px;
+}
+.card-play-icon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(.8);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.92);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  opacity: 0;
+  transition: var(--transition);
+  color: var(--primary);
+}
+.video-card:hover .card-play-icon { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.card-info { padding: 10px 12px 12px; }
+.card-title {
+  font-size: 14px; font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text);
+}
+.card-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.card-meta span { white-space: nowrap; }
+
+/* ========== Empty State ========== */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+.empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state .empty-text { font-size: 15px; }
+
+/* ========== Detail Page ========== */
+.detail-page {
+  display: none;
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.detail-page.show { display: block; }
+
+.detail-header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-sm);
+  padding: 0 20px;
+  height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.detail-back {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  color: var(--text);
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+.detail-back:hover { background: #e5e7eb; }
+.detail-header-title {
+  font-size: 15px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.detail-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+.detail-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.detail-banner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.detail-banner img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.detail-banner iframe {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border: none;
+  display: none;
+}
+.detail-banner.playing img,
+.detail-banner.playing .detail-banner-play,
+.detail-banner.playing .detail-poster-fb { display: none; }
+.detail-banner.playing iframe { display: block; }
+.detail-banner .detail-poster-fb {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.5); font-size: 56px;
+}
+.detail-banner-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  background: rgba(0,0,0,0);
+}
+.detail-banner-play:hover { background: rgba(0,0,0,0.15); }
+.detail-banner-play-icon {
+  width: 68px; height: 68px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.92);
+  color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  transition: var(--transition);
+}
+.detail-banner-play:hover .detail-banner-play-icon { transform: scale(1.1); }
+.detail-banner-close {
+  position: absolute; top: 12px; right: 12px; z-index: 5;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.detail-banner.playing .detail-banner-close { display: flex; }
+
+.detail-info { padding: 0 0 12px; }
+.detail-title { font-size: 22px; font-weight: 700; line-height: 1.3; }
+@media (max-width: 640px) { .detail-title { font-size: 18px; } }
+.detail-meta-row {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 12px;
+  align-items: center;
+}
+.detail-year, .detail-status {
+  font-size: 13px; color: var(--text-muted);
+  background: var(--bg);
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+.detail-source-tag {
+  font-size: 12px; color: var(--primary);
+  background: var(--primary-light);
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.detail-desc {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+.detail-cast {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.detail-cast strong { color: var(--text); }
+
+/* Play section */
+.play-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.play-actions {
+  display: flex; gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.play-actions-row {
+  display: flex; gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.play-actions + .play-actions { margin-top: 12px; }
+.btn-play {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 13px 30px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 24px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: var(--transition);
+  border: none; cursor: pointer;
+}
+.btn-play:hover { background: #e55a2b; transform: scale(1.03); }
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 12px 24px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 24px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  background: none;
+}
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.source-section-inline {
+  margin-top: 16px;
+  display: none; /* 暂时隐藏源站小链接 */
+  gap: 8px; flex-wrap: wrap;
+}
+.source-link-inline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  background: var(--bg);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: var(--transition);
+  cursor: pointer;
+}
+.source-link-inline:hover { background: var(--primary-light); color: var(--primary); }
+
+/* Episode selector */
+.episode-section {
+  margin-top: 24px;
+}
+.episode-title {
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.episode-list {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.ep-btn {
+  min-width: 44px; height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+}
+.ep-btn:hover { border-color: var(--primary); color: var(--primary); }
+.ep-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.ep-btn.ep-more { opacity: 0.6; cursor: default; background: var(--bg); }
+
+/* ========== Pagination ========== */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 32px 0 20px;
+  flex-wrap: wrap;
+}
+.page-btn {
+  min-width: 36px; height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.page-btn:hover { border-color: var(--primary); color: var(--primary); }
+.page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+.page-btn:disabled { opacity: 0.4; cursor: default; }
+.page-jump {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 13px; color: var(--text-muted);
+}
+.page-jump input {
+  width: 44px; height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  outline: none;
+}
+.page-jump input:focus { border-color: var(--primary); }
+.page-info {
+  font-size: 13px; color: var(--text-muted);
+  margin-right: 12px;
+}
+
+/* ========== Loading placeholder ========== */
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========== Scrollbar ========== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+/* ========== Toast ========== */
+.toast {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  background: var(--text);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 24px;
+  font-size: 14px;
+  z-index: 300;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+.toast.show { opacity: 1; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">🎬</div>
+      影视聚合
+    </div>
+    <div class="search-wrap">
+      <input type="text" class="search-input" id="searchInput"
+        placeholder="搜索电影、电视剧、动漫...">
+      <button class="search-btn" id="searchBtn" title="搜索">🔍</button>
+    </div>
+  </div>
+</header>
+
+<!-- ==================== MAIN ==================== -->
+<main class="main">
+
+  <!-- Data Sources -->
+  <section class="source-section">
+    <div class="source-list" id="sourceList">
+      <!-- dynamic -->
+    </div>
+  </section>
+
+  <!-- Main Categories -->
+  <section class="category-section">
+    <div class="cat-tabs" id="catTabs">
+      <!-- dynamic -->
+    </div>
+  </section>
+
+  <!-- Sub Categories -->
+  <section class="subcat-section" id="subcatSection">
+    <div class="subcat-list" id="subcatList">
+      <!-- dynamic -->
+    </div>
+  </section>
+
+  <!-- Results -->
+  <div class="result-info">
+    <div class="result-count" id="resultCount">共 <strong>0</strong> 部作品</div>
+    <select class="sort-select" id="sortSelect">
+      <option value="year">最新上映</option>
+      <option value="default">默认排序</option>
+      <option value="rating">评分最高</option>
+      <option value="title">名称排序</option>
+    </select>
+  </div>
+
+  <!-- Video Grid -->
+  <div class="video-grid" id="videoGrid">
+    <!-- dynamic -->
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination" id="pagination">
+    <!-- dynamic -->
+  </div>
+</main>
+
+<!-- ==================== DETAIL PAGE ==================== -->
+<div class="detail-page" id="detailPage">
+  <div class="detail-header">
+    <button class="detail-back" onclick="closeDetail()" title="返回">←</button>
+    <span class="detail-header-title" id="detailHeaderTitle">详情</span>
+  </div>
+  <div class="detail-content" id="detailContent">
+    <!-- dynamic -->
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ==================== SCRIPTS ==================== -->
+<script>
+// ============================================================
+//  DATA LAYER — 从 JSON 文件加载真实数据，fallback 到嵌入式示例数据
+// ============================================================
+
+// 数据源配置
+const DATA_SOURCES = [
+  { id: 'all',      name: '全部来源', color: '#6b7280' },
+  { id: 'mediavip', name: '免VIP电影网', color: '#ff6b35' },
+  { id: 'xfej',     name: '葡萄影视',   color: '#8b5cf6' },
+  { id: 'jieshui8', name: '片多多',     color: '#3b82f6' },
+  { id: '12ju',     name: 'VIP影院',    color: '#10b981' },
+];
+
+// 分类配置 — mediavip + xfej + jieshui8
+const CATEGORIES = [
+  { id: 'movie',  name: '电影',  icon: '🎬', subcats: ['邵氏电影','理论电影','动作','爱情','喜剧','恐怖','惊悚','悬疑','犯罪','剧情','战争','灾难','科幻','奇幻','冒险','纪录','论理','其他'] },
+  { id: 'tv',     name: '连续剧',icon: '📺', subcats: ['国产剧','港台剧','香港剧','台湾剧','韩国剧','日本剧','日韩剧','欧美剧','泰国剧','短剧','其他剧'] },
+];
+
+// 默认的空视频列表（JSON 加载前/失败时的 fallback）
+let ALL_VIDEOS = [];
+
+// 海报渐变色生成
+function generatePosterColor(title) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  const h = Math.abs(hash % 360);
+  const s = 45 + (hash % 25);
+  const l = 25 + (hash % 20);
+  return `hsl(${h}, ${s}%, ${l}%)`;
+}
+
+// 加载数据文件
+async function loadData() {
+  // 尝试从 JSON 文件加载
+  const dataFiles = [
+    'data/full_videos.json',
+    'data/xfej.json',
+    'data/jieshui8.json',
+    'data/12ju.json',
+  ];
+
+  let loaded = false;
+  for (const file of dataFiles) {
+    try {
+      const resp = await fetch(file);
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      if (json.videos && json.videos.length > 0) {
+        // 将外部数据结构映射为内部格式
+        const prefix = json.source || file;
+        json.videos.forEach(v => {
+          // 跳过无流地址的视频
+          if (!v.streamUrl) return;
+          ALL_VIDEOS.push({
+            id:       prefix + '_' + v.id,
+            title:    v.title,
+            cat:      v.category || 'movie',
+            subcat:   v.subcat || '',
+            year:     v.year || '',
+            rating:   v.rating || 0,
+            duration: v.duration || v.status || '',
+            tags:     v.tags || [],
+            desc:     v.desc || '',
+            cast:     v.cast || v.actors || '',
+            src:      v.source || prefix,
+            posterColor: generatePosterColor(v.title),
+            poster:   v.poster || '',
+            url:      v.url || '',
+            status:   v.status || '',
+            streamUrl: v.streamUrl || '',
+          });
+        });
+        loaded = true;
+        console.log(`✅ 已加载 ${file}: ${json.videos.length} 条数据`);
+      }
+    } catch (e) {
+      console.warn(`⚠ 无法加载 ${file}: ${e.message}`);
+    }
+  }
+
+  // 如果没有任何数据加载成功，使用微小的 fallback 示例
+  if (!loaded || ALL_VIDEOS.length === 0) {
+    console.warn('⚠ 无数据源可用，使用示例数据');
+    ALL_VIDEOS = [
+      { id:'demo_1', title:'数据加载中...', cat:'movie', subcat:'', year:'', rating:0, duration:'', tags:[], desc:'请在 data/ 目录下放置 JSON 数据文件，或运行 scraper.py 生成数据。', cast:'', src:'mediavip', posterColor:'#555' },
+    ];
+  }
+
+  // 初始渲染
+  renderSources();
+  renderCatTabs();
+  renderSubcats();
+  renderCards();
+
+  // 如果 URL 中有 hash 路由，恢复详情页
+  if (location.hash.startsWith('#detail/')) {
+    const id = decodeURIComponent(location.hash.replace('#detail/', ''));
+    if (id && ALL_VIDEOS.length > 0) {
+      openDetail(id);
+    }
+  }
+}
+
+// ============================================================
+//  STATE
+// ============================================================
+let state = {
+  currentSource: 'all',
+  currentCat: 'movie',
+  currentSubcat: null,  // null = 全部
+  searchQuery: '',
+  sortBy: 'year',
+  page: 1,
+  pageSize: 20,
+};
+
+// ============================================================
+//  RENDER
+// ============================================================
+
+function renderSources() {
+  const el = document.getElementById('sourceList');
+  el.innerHTML = DATA_SOURCES.map(s => `
+    <div class="source-item${s.id === state.currentSource ? ' active' : ''}"
+         data-source="${s.id}" onclick="selectSource('${s.id}')">
+      <span class="source-dot" style="background:${s.color}"></span>
+      ${s.name}
+    </div>
+  `).join('');
+}
+
+function renderCatTabs() {
+  const el = document.getElementById('catTabs');
+  el.innerHTML = CATEGORIES.map(c => {
+    return `
+      <div class="cat-tab${c.id === state.currentCat ? ' active' : ''}"
+           data-cat="${c.id}" onclick="selectCat('${c.id}')">
+        ${c.icon} ${c.name}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSubcats() {
+  const cat = CATEGORIES.find(c => c.id === state.currentCat);
+  if (!cat) return;
+  const el = document.getElementById('subcatList');
+  const allActive = state.currentSubcat === null;
+  let html = `<span class="subcat-tag all${allActive ? ' active' : ''}" data-subcat="" onclick="selectSubcat(null)">全部</span>`;
+  html += cat.subcats.map(s => `
+    <span class="subcat-tag${s === state.currentSubcat ? ' active' : ''}"
+          data-subcat="${s}" onclick="selectSubcat('${s}')">${s}</span>
+  `).join('');
+  el.innerHTML = html;
+}
+
+function getFilteredVideos() {
+  const src = state.currentSource;
+  const cat = state.currentCat;
+  const sub = state.currentSubcat;
+  const q = state.searchQuery.trim() ? state.searchQuery.trim().toLowerCase() : '';
+  const sort = state.sortBy;
+
+  // 单循环筛选（避免多次 filter 遍历）
+  let list = [];
+  for (let i = 0; i < ALL_VIDEOS.length; i++) {
+    const v = ALL_VIDEOS[i];
+    if (src !== 'all' && v.src !== src) continue;
+    if (v.cat !== cat) continue;
+    if (sub && v.subcat !== sub) continue;
+    if (q && !v.title.toLowerCase().includes(q) 
+        && !v.desc.toLowerCase().includes(q)
+        && !(v.cast && v.cast.toLowerCase().includes(q))) continue;
+    list.push(v);
+  }
+
+  // sort
+  if (sort === 'rating') list.sort((a,b) => b.rating - a.rating);
+  else if (sort === 'year')   list.sort((a,b) => b.year - a.year);
+  else if (sort === 'title')  list.sort((a,b) => a.title.localeCompare(b.title, 'zh'));
+
+  return list;
+}
+
+function renderCards() {
+  const list = getFilteredVideos();
+  const totalPages = Math.ceil(list.length / state.pageSize);
+  // 确保当前页不越界
+  if (state.page > totalPages) state.page = totalPages || 1;
+
+  const el = document.getElementById('videoGrid');
+  const countEl = document.getElementById('resultCount');
+
+  countEl.innerHTML = `共 <strong>${list.length}</strong> 部作品，第 <strong>${state.page}</strong>/${totalPages || 1} 页`;
+
+  if (list.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">暂无符合条件的作品</div></div>`;
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  // 分页切片
+  const start = (state.page - 1) * state.pageSize;
+  const pageVideos = list.slice(start, start + state.pageSize);
+
+  el.innerHTML = pageVideos.map(v => {
+    return `
+      <div class="video-card" onclick="openDetail('${v.id}')">
+        <div class="card-poster-wrap">
+          ${v.poster
+            ? `<img class="card-poster" src="${v.poster}" alt="${v.title}" loading="lazy" onerror="this.style.display='none';this.parentElement.querySelector('.card-poster-fb').style.display='block'"><div class="card-poster card-poster-fb" style="display:none;background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})"></div>`
+            : `<div class="card-poster" style="background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})"></div>`}
+          <div class="card-play-icon">▶</div>
+        </div>
+        <div class="card-info">
+          <div class="card-title">${v.title}</div>
+          <div class="card-meta">
+            <span>${v.year}</span>
+            <span>${v.duration}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // 渲染分页
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  if (totalPages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button class="page-btn" onclick="goPage(1)" ${state.page===1?'disabled':''}>«</button>`;
+  html += `<button class="page-btn" onclick="goPage(${state.page-1})" ${state.page===1?'disabled':''}>‹</button>`;
+
+  // 页码范围
+  const range = 4;
+  let startP = Math.max(1, state.page - range);
+  let endP = Math.min(totalPages, state.page + range);
+  if (state.page - startP < range) endP = Math.min(totalPages, endP + range - (state.page - startP));
+  if (endP - state.page < range) startP = Math.max(1, startP - (range - (endP - state.page)));
+
+  if (startP > 1) html += `<button class="page-btn" onclick="goPage(1)">1</button>`;
+  if (startP > 2) html += `<span style="color:var(--text-muted);padding:0 4px">…</span>`;
+
+  for (let p = startP; p <= endP; p++) {
+    html += `<button class="page-btn${p===state.page?' active':''}" onclick="goPage(${p})">${p}</button>`;
+  }
+
+  if (endP < totalPages - 1) html += `<span style="color:var(--text-muted);padding:0 4px">…</span>`;
+  if (endP < totalPages) html += `<button class="page-btn" onclick="goPage(${totalPages})">${totalPages}</button>`;
+
+  html += `<button class="page-btn" onclick="goPage(${state.page+1})" ${state.page>=totalPages?'disabled':''}>›</button>`;
+  html += `<button class="page-btn" onclick="goPage(${totalPages})" ${state.page>=totalPages?'disabled':''}>»</button>`;
+
+  // 跳页
+  html += `<span class="page-jump">跳至<input type="number" id="jumpPage" min="1" max="${totalPages}" value="${state.page}" onkeydown="if(event.key==='Enter')goPage(parseInt(this.value))">页</span>`;
+
+  document.getElementById('pagination').innerHTML = html;
+}
+
+function goPage(p) {
+  const list = getFilteredVideos();
+  const totalPages = Math.ceil(list.length / state.pageSize) || 1;
+  p = Math.max(1, Math.min(p, totalPages));
+  if (p !== state.page) {
+    state.page = p;
+    renderCards();
+    window.scrollTo({ top: document.getElementById('videoGrid').offsetTop - 80, behavior: 'smooth' });
+  }
+}
+
+function lightenColor(hex) {
+  const num = parseInt(hex.replace('#',''), 16);
+  const r = Math.min(255, (num >> 16) + 60);
+  const g = Math.min(255, ((num >> 8) & 0x00FF) + 60);
+  const b = Math.min(255, (num & 0x0000FF) + 60);
+  return '#' + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function openDetail(id) {
+  const v = ALL_VIDEOS.find(x => x.id === id);
+  if (!v) return;
+
+  const catLabel = CATEGORIES.find(c => c.id === v.cat)?.name || v.cat;
+  const sourceName = DATA_SOURCES.find(s => s.id === v.src)?.name || v.src;
+
+  // 设置 hash 路由
+  location.hash = 'detail/' + encodeURIComponent(id);
+
+  // 解析集数
+  let totalEpisodes = 1;
+  const status = v.status || '';
+  const duration = v.duration || '';
+  const epMatch = status.match(/第\s*(\d+)\s*集/);
+  const epMatch2 = status.match(/全\s*(\d+)\s*集/);
+  const epMatch3 = status.match(/更新至?\s*第?\s*(\d+)\s*集/);
+  const epMatch4 = status.match(/^(\d+)$/);
+  if (epMatch) totalEpisodes = parseInt(epMatch[1]);
+  else if (epMatch2) totalEpisodes = parseInt(epMatch2[1]);
+  else if (epMatch3) totalEpisodes = parseInt(epMatch3[1]);
+  else if (epMatch4) totalEpisodes = parseInt(epMatch4[1]);
+  // 葡萄影视特殊处理：status可能是纯数字，duration也可能是集数
+  if (totalEpisodes <= 1 && v.src === 'xfej') {
+    const durMatch = String(duration).match(/^(\d+)$/);
+    if (durMatch) totalEpisodes = parseInt(durMatch[1]);
+  }
+  if (totalEpisodes < 1) totalEpisodes = 1;
+  const isSeries = (v.cat === 'tv') && totalEpisodes > 1;
+
+  // 选集 HTML
+  let episodeHTML = '';
+  if (isSeries) {
+    let btns = '';
+    const maxShow = totalEpisodes > 30 ? 30 : totalEpisodes;
+    for (let ep = 1; ep <= maxShow; ep++) {
+      btns += `<button class="ep-btn" onclick="playEpisode(${v.id.split('_').pop() || 0}, ${ep})">${ep}</button>`;
+    }
+    if (totalEpisodes > 30) btns += `<button class="ep-btn ep-more" disabled>共${totalEpisodes}集</button>`;
+    episodeHTML = `<div class="episode-section"><div class="episode-title">选集</div><div class="episode-list">${btns}</div></div>`;
+  } else {
+    // 电影/单集：只放一个播放按钮
+    episodeHTML = `<div class="episode-section"><button class="btn-play" onclick="startPlay('${v.url.replace(/'/g, "\\'")}', 0)">▶ 立即播放</button></div>`;
+  }
+
+  // 海报：有真实图片用横幅，否则用渐变色占位
+  const posterHTML = v.poster
+    ? `<div class="detail-banner" id="detailBanner" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')">
+         <img src="${v.poster}" alt="${v.title}" onerror="this.style.display='none';this.parentElement.querySelector('.detail-poster-fb').style.display='flex'">
+         <div class="detail-poster-fb" style="background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})">🎬</div>
+         <div class="detail-banner-play"><div class="detail-banner-play-icon">▶</div></div>
+         <iframe id="detailPlayer" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation allow-downloads" referrerpolicy="no-referrer"></iframe>
+         <button class="detail-banner-close" onclick="stopPlay(event)">✕</button>
+       </div>`
+    : `<div class="detail-banner" id="detailBanner" onclick="startPlay('${v.url.replace(/'/g, "\\'")}')">
+         <div class="detail-poster-fb" style="display:flex;background:linear-gradient(135deg,${v.posterColor},${lightenColor(v.posterColor)})">🎬</div>
+         <div class="detail-banner-play"><div class="detail-banner-play-icon">▶</div></div>
+         <iframe id="detailPlayer" allowfullscreen allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation allow-downloads" referrerpolicy="no-referrer"></iframe>
+         <button class="detail-banner-close" onclick="stopPlay(event)">✕</button>
+       </div>`;
+
+  // 渲染详情内容
+  document.getElementById('detailHeaderTitle').textContent = v.title;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-hero">
+      ${posterHTML}
+      <div class="detail-info">
+        <h2 class="detail-title">${v.title}</h2>
+        <div class="detail-meta-row">
+          ${(v.status && v.src === 'xfej' && /^\d+$/.test(v.status)) ? `<span class="detail-status">全${v.status}集</span>` : ''}
+          ${(v.status && !(v.src === 'xfej' && /^\d+$/.test(v.status))) ? `<span class="detail-status">${v.status}</span>` : ''}
+          ${v.year ? `<span class="detail-year">${v.year}</span>` : ''}
+          ${v.subcat ? `<span class="detail-source-tag">${v.subcat}</span>` : ''}
+          <span class="detail-source-tag" style="cursor:pointer" onclick="window.open('${v.url}', '_blank')" title="打开源站">${sourceName}</span>
+        </div>
+        ${v.desc ? `<p class="detail-desc">${v.desc}</p>` : ''}
+        ${v.cast ? `<p class="detail-cast"><strong>演员：</strong>${v.cast}</p>` : ''}
+        ${v.subcat ? `<p class="detail-cast"><strong>分类：</strong>${catLabel} · ${v.subcat}</p>` : ''}
+        ${(v.duration && !(v.src === 'xfej' && v.cat === 'tv' && /^\d+$/.test(String(v.duration)))) ? `<p class="detail-cast"><strong>时长：</strong>${v.duration}</p>` : '' }
+      </div>
+    </div>
+
+    ${episodeHTML}
+  `;
+
+  document.getElementById('detailPage').classList.add('show');
+  document.querySelector('.header').style.display = 'none';
+  document.querySelector('.main').style.display = 'none';
+  window.scrollTo(0, 0);
+}
+
+// 播放器控制
+let currentEpisode = 1;
+
+function playEpisode(vid, ep) {
+  currentEpisode = ep;
+  document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+  const btns = document.querySelectorAll('.ep-btn');
+  if (btns.length >= ep) btns[ep - 1].classList.add('active');
+
+  // 根据数据源构造播放页 URL
+  // URL 结构：
+  //   - jieshui8 / xfej: {vid}-{line}-{ep}.html
+  //   - 12ju / mediavip: {vid}-{ep}-{line}.html(line 默认 1)
+  const hashId = decodeURIComponent(location.hash.replace('#detail/', ''));
+  const v = ALL_VIDEOS.find(x => x.id === hashId);
+  let playUrl;
+  if (v.src === 'xfej') {
+    playUrl = `https://xfej.net/spplay/${vid}-1-${ep}.html`;
+  } else if (v.src === 'jieshui8') {
+    playUrl = `https://m.jieshui8.com/vodplay/${vid}-1-${ep}.html`;
+  } else if (v.src === '12ju') {
+    playUrl = `https://v.12ju.com/video/${vid}-${ep}-1.html`;
+  } else {
+    // mediavip
+    playUrl = `https://www.mediavip.cn/splay/${vid}-${ep}-1/`;
+  }
+  startPlay(playUrl, ep);
+}
+
+function startPlay(url, ep) {
+  ep = ep || 1;
+  const banner = document.getElementById('detailBanner');
+  if (!banner) { window.open(url, '_blank'); return; }
+
+  const hashId = decodeURIComponent(location.hash.replace('#detail/', ''));
+  const v = ALL_VIDEOS.find(x => x.id === hashId);
+  const streamUrl = (v && ep === 1) ? v.streamUrl : '';
+
+  if (streamUrl) {
+    // 第1集：用预抓取的 streamUrl 直连
+    playVideo(banner, streamUrl);
+  } else {
+    // 其他集：iframe 全屏叠加层
+    useIframe(banner, url);
+  }
+}
+
+function playVideo(banner, streamUrl) {
+  let video = document.getElementById('detailVideo');
+  if (!video) {
+    video = document.createElement('video');
+    video.id = 'detailVideo';
+    video.controls = true;
+    video.autoplay = true;
+    video.setAttribute('playsinline', '');
+    video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;';
+    banner.appendChild(video);
+  }
+  // 清理 iframe
+  const iframe = document.getElementById('detailPlayer');
+  if (iframe) iframe.src = '';
+  // 清理旧 hls
+  if (video._hls) { video._hls.destroy(); video._hls = null; }
+  video.removeAttribute('src');
+
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(streamUrl);
+    hls.attachMedia(video);
+    video._hls = hls;
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = streamUrl;
+  }
+  banner.classList.add('playing');
+}
+
+function useIframe(banner, url, source) {
+  const video = document.getElementById('detailVideo');
+  if (video) { video.pause(); if (video._hls) { video._hls.destroy(); video._hls = null; } video.removeAttribute('src'); }
+  const iframe = document.getElementById('detailPlayer');
+  if (iframe) { iframe.src = url; banner.classList.add('playing'); }
+  else { window.open(url, '_blank'); }
+}
+
+function stopPlay(e) {
+  if (e) e.stopPropagation();
+  const banner = document.getElementById('detailBanner');
+  const iframe = document.getElementById('detailPlayer');
+  const video = document.getElementById('detailVideo');
+  if (!banner) return;
+  banner.classList.remove('playing');
+  banner.style.cursor = '';
+  if (iframe) {
+    iframe.src = '';
+    iframe.style.opacity = '';
+    iframe.style.transition = '';
+    iframe.onload = null;
+    iframe.onerror = null;
+  }
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    if (video._hls) { video._hls.destroy(); video._hls = null; }
+    video.remove();
+  }
+}
+
+function closeDetail() {
+  location.hash = '';
+  document.getElementById('detailPage').classList.remove('show');
+  document.querySelector('.header').style.display = '';
+  document.querySelector('.main').style.display = '';
+  stopPlay();
+}
+
+function copyShareLink() {
+  const url = location.origin + location.pathname + location.hash;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('链接已复制，可分享给朋友');
+  }).catch(() => showToast('复制失败'));
+}
+
+// ============================================================
+//  ACTIONS
+// ============================================================
+
+function selectSource(id) {
+  state.currentSource = id;
+  state.page = 1;
+  renderSources();
+  renderCards();
+}
+
+function selectCat(id) {
+  state.currentCat = id;
+  state.currentSubcat = null;
+  state.page = 1;
+  renderCatTabs();
+  renderSubcats();
+  renderCards();
+}
+
+function selectSubcat(name) {
+  state.currentSubcat = name;
+  state.page = 1;
+  renderSubcats();
+  renderCards();
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ============================================================
+//  EVENTS & INIT
+// ============================================================
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  state.searchQuery = this.value;
+  state.page = 1;
+  renderCards();
+});
+
+document.getElementById('searchBtn').addEventListener('click', function() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) showToast(`搜索：${q}`);
+  state.searchQuery = q;
+  state.page = 1;
+  renderCards();
+});
+
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    state.searchQuery = this.value;
+    state.page = 1;
+    renderCards();
+  }
+});
+
+document.getElementById('sortSelect').addEventListener('change', function() {
+  state.sortBy = this.value;
+  state.page = 1;
+  renderCards();
+});
+
+// Hash 路由处理
+window.addEventListener('hashchange', function() {
+  const hash = location.hash;
+  if (!hash || hash === '#') {
+    closeDetail();
+  }
+});
+
+// 页面加载时恢复 hash 路由状态
+if (location.hash.startsWith('#detail/')) {
+  const id = decodeURIComponent(location.hash.replace('#detail/', ''));
+  if (id && ALL_VIDEOS.length > 0) {
+    openDetail(id);
+  }
+}
+
+// Initial render - 加载数据
+loadData();
+</script>
+
+</body>
+</html>
