@@ -72,6 +72,7 @@ input { font: inherit; }
   white-space: nowrap;
   letter-spacing: -.5px;
   display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
 }
 .logo-icon {
   width: 34px; height: 34px;
@@ -238,6 +239,7 @@ input { font: inherit; }
   border-color: var(--primary);
 }
 .subcat-tag.all { font-weight: 600; }
+
 
 /* ========== Result Info ========== */
 .result-info {
@@ -678,7 +680,7 @@ input { font: inherit; }
 <!-- ==================== HEADER ==================== -->
 <header class="header">
   <div class="header-inner">
-    <div class="logo">
+    <div class="logo" id="logoBtn" title="点击清缓存并刷新">
       <div class="logo-icon">🎬</div>
       影视聚合
     </div>
@@ -718,8 +720,8 @@ input { font: inherit; }
   <div class="result-info">
     <div class="result-count" id="resultCount">共 <strong>0</strong> 部作品</div>
     <select class="sort-select" id="sortSelect">
-      <option value="default">默认排序</option>
       <option value="year">最新上映</option>
+      <option value="default">默认排序</option>
       <option value="title">名称排序</option>
     </select>
   </div>
@@ -762,11 +764,13 @@ const DATA_SOURCES = [
   { id: 'xfej',     name: '葡萄影视',   color: '#8b5cf6' },
   { id: 'jieshui8', name: '片多多',     color: '#3b82f6' },
   { id: '12ju',     name: 'VIP影院',    color: '#10b981' },
+  { id: 'pbmkjx',  name: '555',     color: '#06b6d4' },  // 已就绪(流+海报+子类齐全)
+  { id: 'whyungu', name: '龙腾',     color: '#f59e0b' },  // 已就绪(流+海报+子类齐全)
 ];
 
 // 分类配置 — mediavip + xfej + jieshui8
 const CATEGORIES = [
-  { id: 'movie',  name: '电影',  icon: '🎬', subcats: ['动作','爱情','喜剧','剧情','科幻','恐怖','惊悚','悬疑','犯罪','战争','冒险','奇幻','灾难','纪录','论理','邵氏电影','理论电影','其他'] },
+  { id: 'movie',  name: '电影',  icon: '🎬', subcats: ['动作','爱情','喜剧','剧情','科幻','恐怖','惊悚','悬疑','犯罪','战争','冒险','奇幻','灾难','纪录','论理','邵氏电影','理论电影','其他','动漫电影','香港电影','Netflix电影'] },
   { id: 'tv',     name: '连续剧',icon: '📺', subcats: ['国产剧','港台剧','香港剧','台湾剧','韩国剧','日本剧','日韩剧','欧美剧','泰国剧','短剧','其他剧'] },
 ];
 
@@ -826,6 +830,8 @@ var DATA_FILES = [
   { file: 'data/xfej.json',        src: 'xfej' },
   { file: 'data/jieshui8.json',    src: 'jieshui8' },
   { file: 'data/12ju.json',        src: '12ju' },
+  { file: 'data/pbmkjx.json',  src: 'pbmkjx' },   // 555 单文件(含列表/海报/详情/流)
+  { file: 'data/whyungu.json', src: 'whyungu' },  // 龙腾 单文件(含列表/海报/详情/流)
 ];
 
 function mapVideo(v, prefix) {
@@ -850,10 +856,24 @@ function mapVideo(v, prefix) {
 }
 
 async function loadData() {
-  // 1. 获取版本信息
+  // 强制刷新标记(由点击 logo 清缓存设置): 本次加载绕过 HTTP/CDN 缓存重拉数据
+  var forceNoStore = false;
+  try {
+    if (sessionStorage.getItem('__forceNoStore') === '1') {
+      forceNoStore = true;
+      sessionStorage.removeItem('__forceNoStore');
+    }
+  } catch(e) {}
+  // 需要绕过缓存时, 给 URL 加时间戳参数(同时配合 no-store 请求头, 双保险)
+  function noCacheUrl(url) {
+    if (!forceNoStore) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+  }
+
+  // 1. 获取版本信息(versions.json 始终绕过 HTTP 缓存, 保证版本检测最新)
   var versions = null;
   try {
-    var vResp = await fetch('data/versions.json');
+    var vResp = await fetch('data/versions.json?_=' + Date.now(), { cache: 'no-store' });
     if (vResp.ok) versions = await vResp.json();
   } catch(e) { console.warn('版本检测失败，直接网络加载'); }
 
@@ -879,7 +899,7 @@ async function loadData() {
     // 3. 缓存未命中或过期，从网络加载
     try {
       console.log('🌐 网络加载: ' + df.file);
-      var resp = await fetch(df.file);
+      var resp = await fetch(noCacheUrl(df.file), forceNoStore ? { cache: 'no-store' } : {});
       if (!resp.ok) continue;
       var json = await resp.json();
       if (json.videos && json.videos.length > 0) {
@@ -932,7 +952,7 @@ let state = {
   currentCat: 'movie',
   currentSubcat: null,  // null = 全部
   searchQuery: '',
-  sortBy: 'default',
+  sortBy: 'year',
   page: 1,
   pageSize: 20,
 };
@@ -964,13 +984,17 @@ function renderCatTabs() {
   }).join('');
 }
 
+// 折叠: 默认显示2行, 超出则显示"展开"按钮; 点击展开显示全部, 无收起(刷新后回到默认2行)
+// 前端隐藏的子类（不显示筛选标签，也不展示对应内容）
+const HIDDEN_SUBCATS = ['邵氏电影'];
+
 function renderSubcats() {
   const cat = CATEGORIES.find(c => c.id === state.currentCat);
   if (!cat) return;
   const el = document.getElementById('subcatList');
   const allActive = state.currentSubcat === null;
   let html = `<span class="subcat-tag all${allActive ? ' active' : ''}" data-subcat="" onclick="selectSubcat(null)">全部</span>`;
-  html += cat.subcats.map(s => `
+  html += cat.subcats.filter(s => !HIDDEN_SUBCATS.includes(s)).map(s => `
     <span class="subcat-tag${s === state.currentSubcat ? ' active' : ''}"
           data-subcat="${s}" onclick="selectSubcat('${s}')">${s}</span>
   `).join('');
@@ -988,12 +1012,15 @@ function getFilteredVideos() {
   let list = [];
   for (let i = 0; i < ALL_VIDEOS.length; i++) {
     const v = ALL_VIDEOS[i];
+    // 数据源/分类/子类筛选始终生效（选「全部」源则不限制来源）
     if (src !== 'all' && v.src !== src) continue;
     if (v.cat !== cat) continue;
     if (sub && v.subcat !== sub) continue;
-    if (q && !v.title.toLowerCase().includes(q) 
-        && !v.desc.toLowerCase().includes(q)
-        && !(v.cast && v.cast.toLowerCase().includes(q))) continue;
+    if (HIDDEN_SUBCATS.includes(v.subcat)) continue;
+    // 搜索词仅匹配片名（精确搜索，避免简介/演员干扰）
+    if (q) {
+      if (!(v.title || '').toLowerCase().includes(q)) continue;
+    }
     list.push(v);
   }
 
@@ -1206,6 +1233,13 @@ function playEpisode(vid, ep) {
   //   - 12ju / mediavip: {vid}-{ep}-{line}.html(line 默认 1)
   const hashId = decodeURIComponent(location.hash.replace('#detail/', ''));
   const v = ALL_VIDEOS.find(x => x.id === hashId);
+
+  // 新源(MacCMS szbwzl/pbmkjx/whyungu/sychuojia)优先用预抓取流地址直连(HLS)
+  if (v.streamUrl) {
+    startPlay(v.streamUrl, ep);
+    return;
+  }
+
   let playUrl;
   if (v.src === 'xfej') {
     playUrl = `https://xfej.net/spplay/${vid}-1-${ep}.html`;
@@ -1213,9 +1247,11 @@ function playEpisode(vid, ep) {
     playUrl = `https://m.jieshui8.com/vodplay/${vid}-1-${ep}.html`;
   } else if (v.src === '12ju') {
     playUrl = `https://v.12ju.com/video/${vid}-${ep}-1.html`;
-  } else {
-    // mediavip
+  } else if (v.src === 'mediavip') {
     playUrl = `https://www.mediavip.cn/splay/${vid}-${ep}-1/`;
+  } else {
+    alert('该影片暂无可播放的流地址（流地址抓取中或源站限制）');
+    return;
   }
   startPlay(playUrl, ep);
 }
@@ -1391,6 +1427,23 @@ document.getElementById('sortSelect').addEventListener('change', function() {
   state.page = 1;
   renderCards();
 });
+
+// 点击 logo: 清 IndexedDB 缓存 + 强制绕过 HTTP/CDN 缓存刷新(解决手机端强刷无效)
+function clearCacheAndReload() {
+  showToast('已清缓存，正在刷新…');
+  var done = function() {
+    try { sessionStorage.setItem('__forceNoStore', '1'); } catch(e) {}
+    setTimeout(function() { location.reload(); }, 300);
+  };
+  try {
+    if (_db) { try { _db.close(); } catch(e) {} _db = null; }
+    var req = indexedDB.deleteDatabase('movies_cache');
+    req.onsuccess = done;
+    req.onerror = done;
+    req.onblocked = done;
+  } catch(e) { done(); }
+}
+document.getElementById('logoBtn').addEventListener('click', clearCacheAndReload);
 
 // Hash 路由处理
 window.addEventListener('hashchange', function() {
