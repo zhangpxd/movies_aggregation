@@ -263,6 +263,18 @@ input { font: inherit; }
   cursor: pointer;
 }
 
+/* ========== 渐进加载状态条 ========== */
+.load-status {
+  margin: 6px 0 14px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  background: rgba(99,102,241,.12);
+  color: #c7d2fe;
+  font-size: 13px;
+  border: 1px solid rgba(99,102,241,.3);
+  line-height: 1.4;
+}
+
 /* ========== Video Card Grid ========== */
 .video-grid {
   padding-top: 16px;
@@ -726,6 +738,9 @@ input { font: inherit; }
     </select>
   </div>
 
+  <!-- 渐进加载状态条 -->
+  <div class="load-status" id="loadStatus" style="display:none"></div>
+
   <!-- Video Grid -->
   <div class="video-grid" id="videoGrid">
     <!-- dynamic -->
@@ -855,6 +870,12 @@ function mapVideo(v, prefix) {
   };
 }
 
+// 各源文件体积(MB, 2026-07 实测), 用于小源优先加载, 让首屏最快出内容
+var SOURCE_SIZE_MB = {
+  xfej: 10.2, mediavip: 11.2, jieshui8: 13.2,
+  '12ju': 18.1, pbmkjx: 31.3, whyungu: 39.5
+};
+
 async function loadData() {
   // 强制刷新标记(由点击 logo 清缓存设置): 本次加载绕过 HTTP/CDN 缓存重拉数据
   var forceNoStore = false;
@@ -870,6 +891,12 @@ async function loadData() {
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
   }
 
+  // 先渲染页面框架(源/分类/子类), 让用户立刻看到界面, 不必等数据下载完
+  renderSources();
+  renderCatTabs();
+  renderSubcats();
+  showLoadStatus('⏳ 正在加载第一个数据源…');
+
   // 1. 获取版本信息(versions.json 始终绕过 HTTP 缓存, 保证版本检测最新)
   var versions = null;
   try {
@@ -877,71 +904,126 @@ async function loadData() {
     if (vResp.ok) versions = await vResp.json();
   } catch(e) { console.warn('版本检测失败，直接网络加载'); }
 
+  // 小源优先: 按体积升序加载, 首屏最先拿到最小的源即可渲染, 其余后台逐源追加
+  var ordered = DATA_FILES.slice().sort(function(a, b) {
+    return (SOURCE_SIZE_MB[a.src] || 99) - (SOURCE_SIZE_MB[b.src] || 99);
+  });
+  var total = ordered.length;
   var loaded = false;
-  for (var d = 0; d < DATA_FILES.length; d++) {
-    var df = DATA_FILES[d];
+  var firstRendered = false;
+
+  for (var d = 0; d < ordered.length; d++) {
+    var df = ordered[d];
     var cacheKey = df.src;
     var ver = versions && versions[df.file] ? versions[df.file].updated : '';
-    var cachedVer = '';
 
-    // 2. 尝试从 IndexedDB 读取缓存
+    var mapped = null;
+    // 2. 尝试从 IndexedDB 读取缓存(命中且版本一致则直接用)
     try {
       var cached = await cacheGet(cacheKey);
       if (cached && cached.videos && cached.ver === ver) {
         console.log('📦 缓存命中: ' + df.file);
-        cached.videos.forEach(function(v) { ALL_VIDEOS.push(v); });
-        loaded = true;
-        continue;
+        mapped = cached.videos;
       }
-      if (cached) cachedVer = cached.ver || '';
     } catch(e) {}
 
     // 3. 缓存未命中或过期，从网络加载
-    try {
-      console.log('🌐 网络加载: ' + df.file);
-      var resp = await fetch(noCacheUrl(df.file), forceNoStore ? { cache: 'no-store' } : {});
-      if (!resp.ok) continue;
-      var json = await resp.json();
-      if (json.videos && json.videos.length > 0) {
-        var prefix = json.source || df.file;
-        var mapped = [];
-        json.videos.forEach(function(v) {
-          if (!v.streamUrl) return;
-          mapped.push(mapVideo(v, prefix));
-        });
-        ALL_VIDEOS.push.apply(ALL_VIDEOS, mapped);
-        loaded = true;
-        // 存入 IndexedDB
-        cacheSet(cacheKey, { ver: ver, videos: mapped }).catch(function(){});
-        console.log('✅ 已缓存: ' + df.file + ' (' + mapped.length + '条)');
-      }
-    } catch(e) {
-      console.warn('⚠ 加载失败: ' + df.file + ' ' + e.message);
-      // 网络失败时尝试用旧的缓存
+    if (!mapped) {
       try {
-        var fallback = await cacheGet(cacheKey);
-        if (fallback && fallback.videos) {
-          console.log('📦 离线缓存: ' + df.file);
-          fallback.videos.forEach(function(v) { ALL_VIDEOS.push(v); });
-          loaded = true;
+        console.log('🌐 网络加载: ' + df.file);
+        var resp = await fetch(noCacheUrl(df.file), forceNoStore ? { cache: 'no-store' } : {});
+        if (!resp.ok) {
+          console.warn('⚠ 跳过(HTTP ' + resp.status + '): ' + df.file);
+        } else {
+          var json = await resp.json();
+          if (json.videos && json.videos.length > 0) {
+            var prefix = json.source || df.file;
+            mapped = [];
+            json.videos.forEach(function(v) {
+              if (!v.streamUrl) return;
+              mapped.push(mapVideo(v, prefix));
+            });
+            cacheSet(cacheKey, { ver: ver, videos: mapped }).catch(function(){});
+            console.log('✅ 已缓存: ' + df.file + ' (' + mapped.length + '条)');
+          }
         }
-      } catch(e2) {}
+      } catch(e) {
+        console.warn('⚠ 加载失败: ' + df.file + ' ' + e.message);
+        // 网络失败时尝试用旧的缓存兜底
+        try {
+          var fallback = await cacheGet(cacheKey);
+          if (fallback && fallback.videos) {
+            console.log('📦 离线缓存: ' + df.file);
+            mapped = fallback.videos;
+          }
+        } catch(e2) {}
+      }
+    }
+
+    if (mapped && mapped.length > 0) {
+      ALL_VIDEOS.push.apply(ALL_VIDEOS, mapped);
+      loaded = true;
+      if (!firstRendered) {
+        // 首源到达即首屏渲染, 用户不再白等全部源下完
+        firstRendered = true;
+        hideLoadStatus();
+        renderCards();
+        if (location.hash.startsWith('#detail/')) {
+          var id = decodeURIComponent(location.hash.replace('#detail/', ''));
+          if (id && ALL_VIDEOS.length > 0) openDetail(id);
+        }
+      } else {
+        // 后续源: 更新状态条并刷新卡片(新数据已追加进来)
+        updateLoadStatus(d + 1, total, ALL_VIDEOS.length, df.src);
+        renderCards();
+      }
+    } else {
+      updateLoadStatus(d + 1, total, ALL_VIDEOS.length, df.src, true);
     }
   }
 
   if (!loaded || ALL_VIDEOS.length === 0) {
-    ALL_VIDEOS = [{ id:'demo_1', title:'数据加载中...', cat:'movie', src:'mediavip', posterColor:'#555' }];
+    ALL_VIDEOS = [{ id:'demo_1', title:'数据加载失败', cat:'movie', src:'mediavip', posterColor:'#555' }];
+    hideLoadStatus();
+    renderCards();
+    return;
   }
 
-  renderSources();
-  renderCatTabs();
-  renderSubcats();
+  finishLoadStatus(total, ALL_VIDEOS.length);
   renderCards();
+}
 
-  if (location.hash.startsWith('#detail/')) {
-    var id = decodeURIComponent(location.hash.replace('#detail/', ''));
-    if (id && ALL_VIDEOS.length > 0) openDetail(id);
-  }
+// ---------- 渐进加载状态条 ----------
+function showLoadStatus(msg) {
+  var el = document.getElementById('loadStatus');
+  if (el) { el.style.display = 'block'; el.textContent = msg; }
+}
+function hideLoadStatus() {
+  var el = document.getElementById('loadStatus');
+  if (el) el.style.display = 'none';
+}
+function srcName(src) {
+  var s = DATA_SOURCES.find(function(x){ return x.id === src; });
+  return s ? s.name : src;
+}
+function updateLoadStatus(done, total, count, src, empty) {
+  var el = document.getElementById('loadStatus');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = '✅ 已加载 ' + done + '/' + total + ' 源 · 共 ' + count + ' 部作品'
+    + (empty ? '（' + srcName(src) + ' 无数据，跳过）' : '')
+    + '　|　⏳ 其余源加载中…';
+}
+function finishLoadStatus(total, count) {
+  var el = document.getElementById('loadStatus');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = '✅ 全部 ' + total + ' 个数据源已加载，共 ' + count + ' 部作品';
+  setTimeout(function() {
+    el.style.transition = 'opacity .6s';
+    el.style.opacity = '0';
+    setTimeout(function(){ if (el) el.style.display = 'none'; }, 600);
+  }, 3000);
 }
 
 // ============================================================
