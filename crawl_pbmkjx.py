@@ -1,12 +1,12 @@
 """crawl_pbmkjx.py —— 555 源整合抓取脚本(单文件产出)。
 
-把原来分散的 mac_scraper(列表+详情) / fetch_streams(抓流) / merge_streams(合并)
+把 mac_scraper(列表+详情) / fetch_streams(抓流) 整合, 流的合并由本文件的 fold() 完成
 整合为一个入口, 最终只保留一份可用主文件 data/pbmkjx.json(含列表/海报/详情/年份/分类/状态/流地址)。
 
 依赖(均为项目保留的核心模块, 不可删):
   mac_scraper.py  -> 列表+详情(写入 data/pbmkjx.json)
   fetch_streams.py-> 抓流(写入 data/pbmkjx_streams_cp.json + data/pbmkjx_streams.json)
-  merge_streams.py-> 由检查点合并
+  fold()          -> 由检查点把流合并进主文件(本文件内实现)
 
 用法:
   python crawl_pbmkjx.py all       # 完整管线: 列表+详情 -> 抓流 -> fold 为单文件
@@ -125,6 +125,14 @@ def main():
             except Exception:
                 pass
         smoke(n)
+    elif mode.startswith('test'):
+        n = 20
+        if ':' in mode:
+            try:
+                n = int(mode.split(':', 1)[1])
+            except Exception:
+                pass
+        ms.run_test(NAME, LABEL, BASE, n=n, delay=5, output=MAIN)
     elif mode == 'all':
         print(f'>>> [{LABEL}] 完整管线启动 {datetime.now():%H:%M:%S}')
         ms.run_source(NAME, LABEL, BASE, WORKERS)

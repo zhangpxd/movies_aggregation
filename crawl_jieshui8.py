@@ -13,6 +13,10 @@ import os, sys, json, re, time, requests
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import crawl_common as cc
+NEWEST_FIRST = True  # MacCMS 列表按更新时间倒序(新内容在顶部), 可安全"整页已知即停页"
+
 NAME = 'jieshui8'
 LABEL = '片多多'
 BASE = 'https://m.jieshui8.com'
@@ -20,8 +24,10 @@ OUT = 'data/jieshui8.json'
 SMOKE = 'data/jieshui8_smoke.json'
 
 H = {
-    'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html',
-    'Accept-Language': 'zh-CN', 'Accept-Encoding': 'gzip, deflate',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
     'Referer': BASE + '/',
 }
 DELAY = 0.15
@@ -53,7 +59,7 @@ def parse_list(html):
     return vids
 
 
-def scrape_sub(slug, cat_id, subcat, max_pages=50):
+def scrape_sub(slug, cat_id, subcat, max_pages=50, known_ids=None, stop_if_known=False):
     vids = []
     try:
         r = sess.get(f'{BASE}/vodtype/{slug}.html', headers=H, timeout=20)
@@ -66,6 +72,9 @@ def scrape_sub(slug, cat_id, subcat, max_pages=50):
     tp = max(int(p) for p in pages) if pages else 1
     MAX_PAGES = min(tp, max_pages)
     vids = parse_list(r.text)
+    if stop_if_known and known_ids is not None and vids and all(v['id'] in known_ids for v in vids):
+        print(f'    [{cat_id}] 首页全部已知, 增量停页')
+        MAX_PAGES = 1
     if MAX_PAGES > 1:
         plist = list(range(2, MAX_PAGES + 1))
         for i in range(0, len(plist), 3):
@@ -127,8 +136,9 @@ def save(all_v):
 
 def run_list():
     all_v = load_existing()
+    known = set(all_v.keys())
     for slug, cat_id, subcat in SUBS:
-        uni = scrape_sub(slug, cat_id, subcat)
+        uni = scrape_sub(slug, cat_id, subcat, known_ids=known, stop_if_known=NEWEST_FIRST)
         added = 0
         for v in uni:
             if v['id'] not in all_v:
@@ -146,9 +156,10 @@ def run_stream():
     except Exception as e:
         print(f'[{LABEL}] 读取 {OUT} 失败: {e}'); return
     videos = data['videos']
-    tasks = [(v['id'], i) for i, v in enumerate(videos) if not v.get('streamUrl')]
+    state = cc.load_state(videos=videos)
+    tasks = [(v['id'], i) for i, v in enumerate(videos) if cc.need_detail(v['id'], v, state)]
     need = len(tasks)
-    print(f'[{LABEL}] 抓流: 总量 {len(videos)} 需抓 {need}')
+    print(f'[{LABEL}] 抓流: 总量 {len(videos)} 需抓(新/缺流/超期){need}')
     done = 0
     for i in range(0, need, 300):
         batch = tasks[i:i + 300]
@@ -158,13 +169,16 @@ def run_stream():
                 s = extract_stream(vid)
                 if s:
                     videos[idx]['streamUrl'] = s
+                    cc.mark_verified(state, vid)
             list(ex.map(p, batch))
         done += len(batch)
         if (i // 300) % 10 == 0:
             data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             json.dump(data, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False)
+            cc.save_state(state)
     data['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     json.dump(data, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False)
+    cc.save_state(state)
     n = sum(1 for v in videos if v.get('streamUrl'))
     print(f'[{LABEL}] 抓流完成: 有流 {n}/{len(videos)}')
 
@@ -188,6 +202,71 @@ def smoke(n=10):
     print(f'>>> [{LABEL}] 冒烟报告 -> {SMOKE}')
 
 
+def _is_empty(val):
+    return val is None or val == '' or val == [] or val == {}
+
+def merge_item(old, new):
+    """增量 upsert 合并: new 的空值不覆盖 old 的非空值, 避免补全时抹掉已有元数据(year等)。"""
+    for k, val in new.items():
+        if _is_empty(val) and k in old and not _is_empty(old[k]):
+            continue
+        old[k] = val
+    return old
+
+def run_test(n=20, delay=5):
+    """测试模式: 单线程, 只抓首类前n条; 增量续抓——已知且流地址新鲜的条目跳过抓流, 只抓新/缺流/超期条目。"""
+    import os
+    print(f'>>> [{LABEL}] TEST 单线程: 每条约{delay}s, 抓前{n}条, 增量upsert进 {OUT}')
+    videos = []
+    if os.path.exists(OUT):
+        try:
+            videos = json.load(open(OUT, encoding='utf-8')).get('videos', [])
+        except Exception:
+            videos = []
+    id2v = {v['id']: v for v in videos}
+    state = cc.load_state(videos=videos)
+    slug, cat_id, subcat = SUBS[0]
+    uni = scrape_sub(slug, cat_id, subcat, max_pages=1)
+    sample = uni[:n]
+    print(f'[{LABEL}] 首类解析 {len(uni)} 条, 取前 {len(sample)} 条')
+    done = 0
+    for v in sample:
+        vid = v['id']
+        existing = id2v.get(vid)
+        if existing is not None:
+            merge_item(existing, v)          # 合并列表元数据(空值不覆盖非空)
+        else:
+            videos.append(v)
+            id2v[vid] = v
+            existing = v
+        if cc.need_detail(vid, existing, state):
+            s = extract_stream(vid)
+            if s:
+                existing['streamUrl'] = s
+            cc.mark_verified(state, vid)
+            tag = '抓流'
+        else:
+            tag = '跳过(已知+流新鲜)'
+        done += 1
+        print(f'    [{LABEL}] {done}/{n} #{vid} {existing.get("title","")[:20]!r} 流={"有" if existing.get("streamUrl") else "无"} [{tag}] 主文件={len(videos)}条')
+        if done % 10 == 0:
+            _save_test(videos)
+            cc.save_state(state)
+            print(f'    [{LABEL}] 💾 存盘 {done} 条')
+        time.sleep(delay)
+    _save_test(videos)
+    cc.save_state(state)
+    print(f'>>> [{LABEL}] TEST 完成: 抓取{done}条, 主文件现有 {len(videos)}条')
+
+
+def _save_test(videos):
+    import os
+    out = {'source': BASE, 'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'videos': videos}
+    tmp = OUT + '.tmp'
+    json.dump(out, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False)
+    os.replace(tmp, OUT)
+
+
 def main():
     mode = (sys.argv[1] if len(sys.argv) > 1 else 'all').lower()
     if mode == 'list':
@@ -202,6 +281,14 @@ def main():
             except Exception:
                 pass
         smoke(n)
+    elif mode.startswith('test'):
+        n = 20
+        if ':' in mode:
+            try:
+                n = int(mode.split(':', 1)[1])
+            except Exception:
+                pass
+        run_test(n=n, delay=5)
     elif mode == 'all':
         print(f'>>> [{LABEL}] 完整管线启动 {datetime.now():%H:%M:%S}')
         run_list()

@@ -3,3 +3,16 @@ __pycache__/
 *.pyc
 .DS_Store
 /.clipboard-images/
+
+# 运行时生成的续抓状态(每次运行重新生成, 不入库)
+data/_crawl_state.json
+
+# 日志与临时诊断产物
+*.log
+data/_before/
+data/_jd_probe.html
+data/_scrape_report*
+data/*_test20.log
+data/*_inc_test.log
+data/*_test_rerun.log
+data/*_smoke.json

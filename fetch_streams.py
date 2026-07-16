@@ -1,22 +1,21 @@
 """流地址(m3u8/mp4)抓取脚本 — 预创建版
-读取 4 个已爬详情的 JSON(pbmkjx/szbwzl/whyungu/sychuojia), 为【电影】条目抓取播放流地址。
+读取已爬详情的 JSON(pbmkjx/whyungu), 为【电影】条目抓取播放流地址。
 
 设计要点:
 - 复用详情页 + 播放页解析, 支持 MacCMS 两种 player 配置:
   * encrypt=0 -> url 为明文 m3u8(仅把 '\\/' 还原为 '/')
   * encrypt=2 -> url 为 base64(百分号编码后的 m3u8), 解密: unquote(b64decode(url))
 - 断点续跑: {name}_streams_cp.json 记录已抓取 id -> [streams], 重跑跳过已完成。
-- 限流: 草民(sychuojia)单线程 + 1s 间隔(防 444); 其余 MacCMS 用线程池(默认6) + 全局444冷却。
+- 限流: MacCMS 源用线程池(默认6) + 全局444冷却。
 - 只处理 category=='movie'(跳过电视剧, 符合"先不跑电视剧")。
 - 输出: 检查点 {name}_streams_cp.json + 结束后写 {name}_streams.json(合并完整数据, 供查看/后续并入主JSON)。
   * 不改动正在被详情爬虫写入的 {name}.json, 避免并发写冲突。
 
-用法(草民与另外三源可分离启动, 互不阻塞):
+用法(各源可分离启动, 互不阻塞):
   D:/Python313/python.exe fetch_streams.py            # 全部4源(默认, 串行)
-  D:/Python313/python.exe fetch_streams.py mac        # 仅三源(szblwzl/pbmkjx/whyungu)
-  D:/Python313/python.exe fetch_streams.py sych       # 仅草民(sychuojia)
-  D:/Python313/python.exe fetch_streams.py szbwzl pbmkjx   # 显式指定若干源
-(电影详情跑完后运行; 可反复运行, 自动续跑。建议三源先跑 mac, 草民后再单跑 sych。)
+  D:/Python313/python.exe fetch_streams.py mac        # 仅 MacCMS 源(pbmkjx/whyungu)
+  D:/Python313/python.exe fetch_streams.py pbmkjx whyungu   # 显式指定若干源
+(电影详情跑完后运行; 可反复运行, 自动续跑。)
 """
 import json, re, time, sys, os, random, requests, threading, base64, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -189,24 +188,20 @@ def run_source(name, label, workers):
 
 
 # 源定义(模块级, 供独立脚本 import): name -> (label, workers)
+# 注意: 大象(szbwzl)/草民(sychuojia) 已下架, 不再抓取; 正确入口请用 crawl_pbmkjx.py / crawl_whyungu.py
 SOURCES = {
-    'szbwzl': ('大象', 6),
     'pbmkjx': ('555', 6),
     'whyungu': ('龙腾', 5),
-    'sychuojia': ('草民', 1),  # 单线程防444
 }
-MAC_SOURCES = ['szbwzl', 'pbmkjx', 'whyungu']
-SYCH_SOURCE = ['sychuojia']
+MAC_SOURCES = ['pbmkjx', 'whyungu']
 
 
 if __name__ == '__main__':
     args = sys.argv[1:]
     if not args or args[0] in ('all', '--all'):
-        sel = list(SOURCES.keys())          # 全部4源(默认)
+        sel = list(SOURCES.keys())          # 全部已启用源(默认)
     elif args[0] == 'mac':
-        sel = MAC_SOURCES                    # 仅三源(MacCMS)
-    elif args[0] == 'sych':
-        sel = SYCH_SOURCE                    # 仅草民
+        sel = MAC_SOURCES                    # 仅 MacCMS 源
     else:
         sel = [a for a in args if a in SOURCES]  # 显式指定源名
     if not sel:
